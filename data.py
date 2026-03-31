@@ -13,7 +13,11 @@ class ReinhardNormalizer:
 
     def fit(self, target_image):
         """Calcule les stats de référence sur une image type."""
-        # OpenCV utilise BGR par défaut, on convertit RGB -> LAB
+        target_image = target_image.astype(np.float32)
+        if target_image.max() <= 1.01:
+            target_image = (target_image * 255).astype(np.uint8)
+        else:
+            target_image = target_image.astype(np.uint8)
         lab = cv2.cvtColor(target_image, cv2.COLOR_RGB2LAB).astype(np.float32)
         self.target_mean = np.mean(lab, axis=(0, 1))
         self.target_std = np.std(lab, axis=(0, 1))
@@ -96,11 +100,16 @@ def get_transforms(mode='train'):
             A.VerticalFlip(p=0.5),            
             A.Transpose(p=0.5),
             A.OneOf([
-                A.GaussianBlur(blur_limit=(3, 5), p=0.5),
-                A.GaussNoise(std_range=(0.01, 0.05), p=0.5),
+                A.GaussianBlur(blur_limit=(3, 5), p=1.0),
+                A.GaussNoise(std_range=(0.01, 0.05), p=1.0),
+                A.MotionBlur(blur_limit=(3, 5), p=1.0)
             ], p=0.3),
-            A.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1, p=0.8),
-            A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.5),
+            A.CoarseDropout(
+                num_holes_range = (4,8),
+                hole_height_range = (8,12),
+                hole_width_range = (8,12), 
+                p=0.5),
+            A.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.1, hue=0.05, p=0.5),
             A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
             ToTensorV2(),
         ])
