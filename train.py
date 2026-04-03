@@ -6,18 +6,18 @@ from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, RichProg
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.callbacks import StochasticWeightAveraging
 from torch.utils.data import DataLoader
+import torch
 
-from data import HistopathDataset, get_transforms
-from models import HDFFModule
+from data import HistopathDataset, get_transforms, get_transforms_curia, get_transforms_dinov2
+from models import ContrastiveHDFFModule, CuriaModule , HDFFModule, Dinov2Module, HistopathLightningModule
+
 
 def train(args):
 
-    with h5py.File(args.train_path, 'r') as f:
-        ref_img = f[list(f.keys())[10]]['img'][()] # L'index 10 au hasard
-        if ref_img.shape[0] == 3:
-            ref_img = ref_img.transpose(1, 2, 0)
-    train_ds = HistopathDataset(args.train_path, transforms=get_transforms(mode='train'), ref_image=ref_img)
-    val_ds = HistopathDataset(args.val_path, transforms=get_transforms(mode='val'), ref_image=ref_img)
+    torch.set_float32_matmul_precision('high')
+    
+    train_ds = HistopathDataset(args.train_path, transforms=get_transforms_dinov2(mode='train'))
+    val_ds = HistopathDataset(args.val_path, transforms=get_transforms_dinov2(mode='val'))
 
     train_loader = DataLoader(
         train_ds, 
@@ -33,37 +33,56 @@ def train(args):
         num_workers=args.num_workers
     )
 
-    # Model Initialization
-    model = HDFFModule(
-        lr=args.lr
+    # # Model Initialization
+    # model = HistopathLightningModule(
+    #     lr=args.lr,
+    #     method="full"
+    # )
+
+    # model = ContrastiveHDFFModule(
+    #     lr=args.lr,
+    #     pretraining = args.pretraining
+    # )
+    # model = CuriaModule(
+    #     lr=args.lr,
+    # )
+    model = Dinov2Module(
+        lr=args.lr,
     )
 
     # Callbacks and Logger
-    checkpoint_dir = os.path.join("models", "hdff_model")
+    checkpoint_dir = os.path.join("models", "dinov2_models_2")
+    monitor_metric = "val/acc"
+    mode = "max"
+    filename_format = "dinov2_2-model-{epoch:02d}"
+
     checkpoint_callback = ModelCheckpoint(
         dirpath=checkpoint_dir,
-        filename="best-model-{epoch:02d}-{val_acc:.4f}",
-        monitor="val/acc",
-        mode="max",
-        save_top_k=1,
-        save_last=True
+        filename=filename_format,
+        monitor=monitor_metric,
+        mode=mode,
+        save_top_k=3,
+        save_last=True,
+        every_n_epochs = 1
     )
     
     early_stop_callback = EarlyStopping(
-        monitor="val/acc",
-        patience=7,
-        mode="max"
+        monitor=monitor_metric,
+        patience=10,
+        mode=mode
     )
 
-    logger = TensorBoardLogger("logs", name="hdff_model")
+    logger = TensorBoardLogger("logs", name="dinov2_model")
     lr_monitor = LearningRateMonitor(logging_interval='epoch')
 
+    callbacks = [RichProgressBar(), lr_monitor, checkpoint_callback, early_stop_callback]
+    
     # Trainer
     trainer = L.Trainer(
         max_epochs=args.epochs,
         accelerator="auto", # Use GPU
         devices=1,
-        callbacks=[checkpoint_callback, early_stop_callback, RichProgressBar(), lr_monitor, StochasticWeightAveraging(swa_lrs=1e-6)],
+        callbacks=callbacks,
         logger=logger,
         precision="16-mixed" if args.use_fp16 else 32,
         deterministic=True
@@ -89,6 +108,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--epochs", type=int, default=50)
+    # parser.add_argument("--pretraining", action="store_true", help="Whether to use the pretraining phase with contrastive loss")
     
     # Hardware
     parser.add_argument("--num_workers", type=int, default=4)
