@@ -337,7 +337,7 @@ class Virchow2Module(L.LightningModule):
         self.backbone = timm.create_model(
             "hf-hub:paige-ai/Virchow2", 
             pretrained=True, 
-            mlp_layer=SwiGLUPacked, 
+            mlp_layer=timm.layers.SwiGLUPacked, 
             act_layer=nn.SiLU
         )
         
