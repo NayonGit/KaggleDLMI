@@ -14,11 +14,11 @@ from huggingface_hub import login
 from transformers import AutoModel, AutoImageProcessor
 
 
-try:
-    login(token="YOUR_TOKEN")
-    print("Registration Successful: You can now access Hugging Face models that require authentication.")
-except:
-    print("⚠️ Warning : Token HF not found.")
+# try:
+#     login(token="YOUR_TOKEN")
+#     print("Registration Successful: You can now access Hugging Face models that require authentication.")
+# except:
+#     print("⚠️ Warning : Token HF not found.")
 
 
 class Dinov2Module(L.LightningModule):
